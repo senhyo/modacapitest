@@ -69,6 +69,11 @@
       background-repeat: no-repeat; background-position: right 14px center;
     }
     select:focus { outline: none; border-color: var(--toss-blue); background-color: #fff; }
+    #openaiModel {
+      width: 100%; padding: 14px 16px; font: inherit; font-size: 15px; color: var(--text);
+      border: 1px solid var(--border); border-radius: 14px; background: #fafbfc;
+    }
+    #openaiModel:focus { outline: none; border-color: var(--toss-blue); background: #fff; }
 
     /* 프롬프트 */
     .prompt-block { margin-top: 24px; }
@@ -192,13 +197,14 @@
           </select>
         </div>
         <div>
-          <div class="label">OpenAI 모델</div>
-          <select id="openaiModel">
-            <option value="gpt-4o" selected>GPT-4o</option>
-            <option value="gpt-4o-mini">GPT-4o mini</option>
-            <option value="gpt-4.1">GPT-4.1</option>
-            <option value="gpt-4.1-mini">GPT-4.1 mini</option>
-          </select>
+          <div class="label">OpenAI 모델 <span style="font-weight:400;color:var(--text-mute);">(선택 또는 직접 입력)</span></div>
+          <input id="openaiModel" list="openaiModels" value="gpt-4o" placeholder="예: gpt-4o" autocomplete="off" />
+          <datalist id="openaiModels">
+            <option value="gpt-4o"></option>
+            <option value="gpt-4o-mini"></option>
+            <option value="gpt-4.1"></option>
+            <option value="gpt-4.1-mini"></option>
+          </datalist>
         </div>
       </div>
 
@@ -386,7 +392,7 @@
     function restore(entry) {
       promptEl.value = entry.prompt;
       if ([...claudeSel.options].some(o => o.value === entry.claude.model)) claudeSel.value = entry.claude.model;
-      if ([...openaiSel.options].some(o => o.value === entry.openai.model)) openaiSel.value = entry.openai.model;
+      if (entry.openai.model) openaiSel.value = entry.openai.model;
       if (entry.thumb) {
         preview.src = entry.thumb; preview.style.display = "block";
         fileName.textContent = "기록에서 불러옴 (새로 해석하려면 이미지를 다시 선택)";
@@ -448,8 +454,24 @@
       }
     });
 
+    /* ---------- OpenAI 모델 목록 자동 로딩 ---------- */
+    async function loadOpenAIModels() {
+      try {
+        const data = await (await fetch("/openai-models")).json();
+        if (!data.models || !data.models.length) return;
+        const dl = document.getElementById("openaiModels");
+        dl.innerHTML = "";
+        for (const id of data.models) {
+          const opt = document.createElement("option");
+          opt.value = id;
+          dl.appendChild(opt);
+        }
+      } catch { /* 실패 시 기본 추천 목록 유지 */ }
+    }
+
     renderHist();
     initGate();
+    loadOpenAIModels();
   </script>
 </body>
 </html>

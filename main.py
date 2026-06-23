@@ -103,6 +103,19 @@ async def config():
     return {"auth_required": bool(APP_PASSWORD)}
 
 
+@app.get("/openai-models")
+async def openai_models():
+    """이 계정에서 사용 가능한 OpenAI 모델 ID 목록을 반환한다."""
+    if openai_client is None:
+        return {"models": [], "error": "OPENAI_API_KEY가 설정되지 않았습니다."}
+    try:
+        resp = await openai_client.models.list()
+        ids = sorted(m.id for m in resp.data)
+        return {"models": ids}
+    except Exception as exc:
+        return {"models": [], "error": f"{type(exc).__name__}: {exc}"}
+
+
 @app.post("/auth")
 async def auth(password: str = Form("")):
     """비밀번호만 검증한다 (입장 화면용)."""

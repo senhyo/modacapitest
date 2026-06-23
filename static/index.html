@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>이미지 해석 비교</title>
+  <link rel="stylesheet" as="style" crossorigin
+        href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
+  <style>
+    :root {
+      --toss-blue: #3182f6;
+      --toss-blue-dark: #1b64da;
+      --bg: #f2f4f6;
+      --card: #ffffff;
+      --text: #191f28;
+      --text-sub: #6b7684;
+      --text-mute: #8b95a1;
+      --border: #e5e8eb;
+      --red: #f04452;
+      --radius: 20px;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: "Pretendard", -apple-system, "Segoe UI", "Malgun Gothic", sans-serif;
+      background: var(--bg); color: var(--text);
+      -webkit-font-smoothing: antialiased; line-height: 1.5;
+      padding: 40px 20px 80px;
+    }
+    .wrap { max-width: 920px; margin: 0 auto; }
+
+    header { text-align: center; margin-bottom: 32px; }
+    header h1 { font-size: 26px; font-weight: 700; letter-spacing: -0.02em; }
+    header p { margin-top: 8px; color: var(--text-sub); font-size: 15px; }
+
+    .card {
+      background: var(--card); border-radius: var(--radius); padding: 28px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.04), 0 8px 24px rgba(0,0,0,0.04);
+    }
+    .results, .history { margin-top: 20px; }
+
+    .label { font-size: 14px; font-weight: 600; color: var(--text); margin-bottom: 10px; }
+
+    /* 드롭존 */
+    .drop {
+      position: relative;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      min-height: 180px; padding: 24px;
+      border: 2px dashed var(--border); border-radius: 16px;
+      background: #fafbfc; cursor: pointer; text-align: center;
+      transition: border-color .15s, background .15s;
+    }
+    .drop:hover, .drop.dragover { border-color: var(--toss-blue); background: #f4f8ff; }
+    .drop.dragover { border-style: solid; }
+    .drop .icon { font-size: 34px; line-height: 1; }
+    .drop .main { margin-top: 10px; font-size: 15px; font-weight: 600; color: var(--text); }
+    .drop .sub { margin-top: 4px; font-size: 13px; color: var(--text-mute); }
+    .drop.has-file { border-style: solid; border-color: var(--toss-blue); background: #f4f8ff; }
+    #preview { display: none; max-height: 220px; max-width: 100%; border-radius: 12px; }
+    #fileName { display: none; margin-top: 10px; font-size: 13px; font-weight: 600; color: var(--toss-blue); }
+
+    /* 모델 선택 */
+    .selectors { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 24px; }
+    @media (max-width: 600px) { .selectors { grid-template-columns: 1fr; } }
+    select {
+      width: 100%; padding: 14px 16px; font: inherit; font-size: 15px; color: var(--text);
+      border: 1px solid var(--border); border-radius: 14px; background: #fafbfc;
+      cursor: pointer; appearance: none;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20' viewBox='0 0 24 24' fill='none' stroke='%238b95a1' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+      background-repeat: no-repeat; background-position: right 14px center;
+    }
+    select:focus { outline: none; border-color: var(--toss-blue); background-color: #fff; }
+
+    /* 프롬프트 */
+    .prompt-block { margin-top: 24px; }
+    textarea {
+      width: 100%; min-height: 56px; padding: 16px;
+      border: 1px solid var(--border); border-radius: 14px;
+      font: inherit; font-size: 15px; color: var(--text); resize: vertical;
+      background: #fafbfc; transition: border-color .15s, background .15s;
+    }
+    textarea:focus { outline: none; border-color: var(--toss-blue); background: #fff; }
+
+    /* 버튼 */
+    button.primary {
+      width: 100%; margin-top: 24px; background: var(--toss-blue); color: #fff;
+      border: 0; border-radius: 14px; padding: 17px; font: inherit; font-size: 17px;
+      font-weight: 700; cursor: pointer; transition: background .15s, transform .05s;
+    }
+    button.primary:hover { background: var(--toss-blue-dark); }
+    button.primary:active { transform: scale(0.99); }
+    button.primary:disabled { background: #c9d2dc; cursor: not-allowed; }
+
+    /* 결과 */
+    .results { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+    @media (max-width: 700px) { .results { grid-template-columns: 1fr; } }
+    .panel { background: var(--card); border-radius: var(--radius); padding: 24px;
+             box-shadow: 0 1px 3px rgba(0,0,0,0.04), 0 8px 24px rgba(0,0,0,0.04); }
+    .panel-head { display: flex; align-items: center; gap: 8px; margin-bottom: 14px; }
+    .panel-head .dot { width: 9px; height: 9px; border-radius: 50%; flex: 0 0 auto; }
+    .panel-head .dot.c { background: #d97757; }
+    .panel-head .dot.o { background: #10a37f; }
+    .panel-head h2 { font-size: 16px; font-weight: 700; }
+    .panel-head .model { margin-left: auto; font-size: 12px; font-weight: 600; color: var(--text-mute);
+                         background: var(--bg); padding: 4px 10px; border-radius: 999px; max-width: 50%;
+                         overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .body { white-space: pre-wrap; font-size: 15px; line-height: 1.65; color: #333d4b; }
+    .body.muted { color: var(--text-mute); }
+    .body.error { color: var(--red); background: #fef2f3; padding: 14px; border-radius: 12px; }
+
+    /* 로딩 */
+    .loading { display: inline-flex; gap: 5px; }
+    .loading span { width: 7px; height: 7px; border-radius: 50%; background: var(--toss-blue);
+                    animation: bounce 1.2s infinite ease-in-out; }
+    .loading span:nth-child(2) { animation-delay: .15s; }
+    .loading span:nth-child(3) { animation-delay: .3s; }
+    @keyframes bounce { 0%,80%,100% { opacity:.25; transform: translateY(0); }
+                        40% { opacity:1; transform: translateY(-4px); } }
+
+    /* 기록 */
+    .history-head { display: flex; align-items: center; margin-bottom: 16px; }
+    .history-head h2 { font-size: 18px; font-weight: 700; }
+    .history-head .clear { margin-left: auto; background: none; border: 0; color: var(--text-mute);
+                           font: inherit; font-size: 14px; font-weight: 600; cursor: pointer; }
+    .history-head .clear:hover { color: var(--red); }
+    .hist-empty { color: var(--text-mute); font-size: 14px; }
+    .hist-item { display: flex; gap: 14px; align-items: center; padding: 14px;
+                 border-radius: 14px; cursor: pointer; transition: background .12s; }
+    .hist-item:hover { background: var(--bg); }
+    .hist-item + .hist-item { margin-top: 4px; }
+    .hist-item img { width: 56px; height: 56px; object-fit: cover; border-radius: 10px; flex: 0 0 auto;
+                     background: var(--bg); }
+    .hist-meta { min-width: 0; flex: 1; }
+    .hist-prompt { font-size: 14px; font-weight: 600; color: var(--text); overflow: hidden;
+                   text-overflow: ellipsis; white-space: nowrap; }
+    .hist-sub { margin-top: 4px; font-size: 12px; color: var(--text-mute); overflow: hidden;
+                text-overflow: ellipsis; white-space: nowrap; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <h1>이미지 해석 비교</h1>
+      <p>사진 한 장을 올리면 Claude와 OpenAI가 각각 해석해 드려요</p>
+    </header>
+
+    <div class="card">
+      <div class="label">이미지</div>
+      <div class="drop" id="drop">
+        <div id="dropDefault">
+          <div class="icon">🖼️</div>
+          <div class="main">이미지를 끌어다 놓거나 클릭하세요</div>
+          <div class="sub">PNG · JPG · WEBP</div>
+        </div>
+        <img id="preview" alt="미리보기" />
+        <div id="fileName"></div>
+      </div>
+      <input type="file" id="fileInput" accept="image/*" hidden />
+
+      <div class="selectors">
+        <div>
+          <div class="label">Claude 모델</div>
+          <select id="claudeModel">
+            <option value="claude-opus-4-8" selected>Claude Opus 4.8</option>
+            <option value="claude-sonnet-4-6">Claude Sonnet 4.6</option>
+            <option value="claude-haiku-4-5">Claude Haiku 4.5</option>
+          </select>
+        </div>
+        <div>
+          <div class="label">OpenAI 모델</div>
+          <select id="openaiModel">
+            <option value="gpt-4o" selected>GPT-4o</option>
+            <option value="gpt-4o-mini">GPT-4o mini</option>
+            <option value="gpt-4.1">GPT-4.1</option>
+            <option value="gpt-4.1-mini">GPT-4.1 mini</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="prompt-block">
+        <div class="label">무엇을 물어볼까요?</div>
+        <textarea id="prompt">이 이미지를 자세히 설명해줘.</textarea>
+      </div>
+
+      <button class="primary" id="submit">해석하기</button>
+    </div>
+
+    <div class="results">
+      <div class="panel">
+        <div class="panel-head">
+          <span class="dot c"></span><h2>Claude</h2>
+          <span class="model" id="claude-model"></span>
+        </div>
+        <div class="body muted" id="claude-body">이미지를 올리고 해석하기를 눌러주세요.</div>
+      </div>
+      <div class="panel">
+        <div class="panel-head">
+          <span class="dot o"></span><h2>OpenAI</h2>
+          <span class="model" id="openai-model"></span>
+        </div>
+        <div class="body muted" id="openai-body">이미지를 올리고 해석하기를 눌러주세요.</div>
+      </div>
+    </div>
+
+    <div class="card history">
+      <div class="history-head">
+        <h2>기록</h2>
+        <button class="clear" id="clearHist">전체 지우기</button>
+      </div>
+      <div id="histList"><div class="hist-empty">아직 기록이 없어요.</div></div>
+    </div>
+  </div>
+
+  <script>
+    const HIST_KEY = "interpretHistory";
+    const HIST_MAX = 20;
+
+    const fileInput = document.getElementById("fileInput");
+    const drop = document.getElementById("drop");
+    const dropDefault = document.getElementById("dropDefault");
+    const preview = document.getElementById("preview");
+    const fileName = document.getElementById("fileName");
+    const promptEl = document.getElementById("prompt");
+    const claudeSel = document.getElementById("claudeModel");
+    const openaiSel = document.getElementById("openaiModel");
+    const submitBtn = document.getElementById("submit");
+    const histList = document.getElementById("histList");
+    const clearHist = document.getElementById("clearHist");
+
+    let currentFile = null;
+
+    /* ---------- 파일 선택 / 드래그앤드롭 ---------- */
+    function setFile(file) {
+      if (!file || !file.type.startsWith("image/")) {
+        alert("이미지 파일만 올릴 수 있어요.");
+        return;
+      }
+      currentFile = file;
+      preview.src = URL.createObjectURL(file);
+      preview.style.display = "block";
+      fileName.textContent = file.name;
+      fileName.style.display = "block";
+      dropDefault.style.display = "none";
+      drop.classList.add("has-file");
+    }
+
+    drop.addEventListener("click", () => fileInput.click());
+    fileInput.addEventListener("change", () => { if (fileInput.files[0]) setFile(fileInput.files[0]); });
+
+    ["dragenter", "dragover"].forEach(ev =>
+      drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.add("dragover"); }));
+    ["dragleave", "dragend"].forEach(ev =>
+      drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.remove("dragover"); }));
+    drop.addEventListener("drop", e => {
+      e.preventDefault();
+      drop.classList.remove("dragover");
+      if (e.dataTransfer.files[0]) setFile(e.dataTransfer.files[0]);
+    });
+
+    /* ---------- 썸네일 ---------- */
+    function makeThumb(file, size = 120) {
+      return new Promise(resolve => {
+        const img = new Image();
+        img.onload = () => {
+          const scale = Math.min(size / img.width, size / img.height, 1);
+          const w = Math.round(img.width * scale), h = Math.round(img.height * scale);
+          const c = document.createElement("canvas");
+          c.width = w; c.height = h;
+          c.getContext("2d").drawImage(img, 0, 0, w, h);
+          resolve(c.toDataURL("image/jpeg", 0.6));
+          URL.revokeObjectURL(img.src);
+        };
+        img.onerror = () => resolve("");
+        img.src = URL.createObjectURL(file);
+      });
+    }
+
+    /* ---------- 결과 렌더 ---------- */
+    const LOADING = '<span class="loading"><span></span><span></span><span></span></span>';
+    function render(bodyId, modelId, result) {
+      const body = document.getElementById(bodyId);
+      document.getElementById(modelId).textContent = result.model || "";
+      body.className = "body";
+      if (result.error) { body.classList.add("error"); body.textContent = "⚠ " + result.error; }
+      else { body.textContent = result.text || "(빈 응답)"; }
+    }
+
+    /* ---------- 기록 ---------- */
+    function loadHist() {
+      try { return JSON.parse(localStorage.getItem(HIST_KEY)) || []; }
+      catch { return []; }
+    }
+    function saveHist(arr) { localStorage.setItem(HIST_KEY, JSON.stringify(arr.slice(0, HIST_MAX))); }
+    function addHist(entry) { const arr = loadHist(); arr.unshift(entry); saveHist(arr); renderHist(); }
+
+    function renderHist() {
+      const arr = loadHist();
+      if (!arr.length) { histList.innerHTML = '<div class="hist-empty">아직 기록이 없어요.</div>'; return; }
+      histList.innerHTML = "";
+      arr.forEach(entry => {
+        const item = document.createElement("div");
+        item.className = "hist-item";
+        const date = new Date(entry.ts).toLocaleString("ko-KR", { dateStyle: "short", timeStyle: "short" });
+        item.innerHTML =
+          `<img src="${entry.thumb || ""}" alt="" />
+           <div class="hist-meta">
+             <div class="hist-prompt"></div>
+             <div class="hist-sub">${date} · ${entry.claude.model} vs ${entry.openai.model}</div>
+           </div>`;
+        item.querySelector(".hist-prompt").textContent = entry.prompt;
+        item.addEventListener("click", () => restore(entry));
+        histList.appendChild(item);
+      });
+    }
+
+    function restore(entry) {
+      promptEl.value = entry.prompt;
+      if ([...claudeSel.options].some(o => o.value === entry.claude.model)) claudeSel.value = entry.claude.model;
+      if ([...openaiSel.options].some(o => o.value === entry.openai.model)) openaiSel.value = entry.openai.model;
+      if (entry.thumb) {
+        preview.src = entry.thumb; preview.style.display = "block";
+        fileName.textContent = "기록에서 불러옴 (새로 해석하려면 이미지를 다시 선택)";
+        fileName.style.display = "block";
+        dropDefault.style.display = "none"; drop.classList.add("has-file");
+      }
+      currentFile = null;
+      render("claude-body", "claude-model", entry.claude);
+      render("openai-body", "openai-model", entry.openai);
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+
+    clearHist.addEventListener("click", () => {
+      if (confirm("모든 기록을 지울까요?")) { localStorage.removeItem(HIST_KEY); renderHist(); }
+    });
+
+    /* ---------- 제출 ---------- */
+    submitBtn.addEventListener("click", async () => {
+      if (!currentFile) { alert("이미지를 먼저 선택해주세요."); return; }
+
+      submitBtn.disabled = true;
+      submitBtn.textContent = "해석 중…";
+      for (const id of ["claude-body", "openai-body"]) {
+        const el = document.getElementById(id); el.className = "body"; el.innerHTML = LOADING;
+      }
+
+      const form = new FormData();
+      form.append("image", currentFile);
+      form.append("prompt", promptEl.value);
+      form.append("claude_model", claudeSel.value);
+      form.append("openai_model", openaiSel.value);
+
+      try {
+        const res = await fetch("/interpret", { method: "POST", body: form });
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({ detail: res.statusText }));
+          throw new Error(err.detail || "요청 실패");
+        }
+        const data = await res.json();
+        render("claude-body", "claude-model", data.claude);
+        render("openai-body", "openai-model", data.openai);
+
+        const thumb = await makeThumb(currentFile);
+        addHist({ ts: Date.now(), prompt: promptEl.value, thumb,
+                  claude: data.claude, openai: data.openai });
+      } catch (e) {
+        for (const id of ["claude-body", "openai-body"]) {
+          const el = document.getElementById(id); el.className = "body error"; el.textContent = "⚠ " + e.message;
+        }
+      } finally {
+        submitBtn.disabled = false;
+        submitBtn.textContent = "해석하기";
+      }
+    });
+
+    renderHist();
+  </script>
+</body>
+</html>

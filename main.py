@@ -17,6 +17,7 @@ DEFAULT_PROMPT = "이 이미지를 자세히 설명해줘."
 
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+APP_PASSWORD = os.getenv("APP_PASSWORD")  # 설정되면 /interpret 호출에 비밀번호 필요
 
 anthropic_client = AsyncAnthropic(api_key=ANTHROPIC_API_KEY) if ANTHROPIC_API_KEY else None
 openai_client = AsyncOpenAI(api_key=OPENAI_API_KEY) if OPENAI_API_KEY else None
@@ -84,9 +85,30 @@ async def run_safely(coro):
         return {"text": None, "error": f"{type(exc).__name__}: {exc}"}
 
 
+def check_password(password: str) -> bool:
+    """APP_PASSWORD가 설정돼 있으면 일치해야 한다. 미설정이면 게이트 없음(로컬용)."""
+    if not APP_PASSWORD:
+        return True
+    return password == APP_PASSWORD
+
+
 @app.get("/")
 async def index():
     return FileResponse("static/index.html")
+
+
+@app.get("/config")
+async def config():
+    """프론트가 비밀번호 게이트가 켜져 있는지 알 수 있게 한다."""
+    return {"auth_required": bool(APP_PASSWORD)}
+
+
+@app.post("/auth")
+async def auth(password: str = Form("")):
+    """비밀번호만 검증한다 (입장 화면용)."""
+    if check_password(password):
+        return {"ok": True}
+    return JSONResponse(status_code=401, content={"ok": False, "detail": "비밀번호가 올바르지 않습니다."})
 
 
 @app.post("/interpret")
@@ -95,7 +117,11 @@ async def interpret(
     prompt: str = Form(DEFAULT_PROMPT),
     claude_model: str = Form(CLAUDE_MODEL),
     openai_model: str = Form(OPENAI_MODEL),
+    password: str = Form(""),
 ):
+    if not check_password(password):
+        return JSONResponse(status_code=401, content={"detail": "비밀번호가 올바르지 않습니다."})
+
     raw = await image.read()
     if not raw:
         return JSONResponse(status_code=400, content={"detail": "이미지가 비어 있습니다."})

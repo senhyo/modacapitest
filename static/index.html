@@ -134,9 +134,35 @@
                    text-overflow: ellipsis; white-space: nowrap; }
     .hist-sub { margin-top: 4px; font-size: 12px; color: var(--text-mute); overflow: hidden;
                 text-overflow: ellipsis; white-space: nowrap; }
+
+    /* 입장(비밀번호) 화면 */
+    #gate { position: fixed; inset: 0; background: var(--bg); z-index: 100;
+            display: none; align-items: center; justify-content: center; padding: 20px; }
+    #gate.show { display: flex; }
+    .gate-card { background: var(--card); border-radius: var(--radius); padding: 36px 28px;
+                 width: 100%; max-width: 380px; text-align: center;
+                 box-shadow: 0 8px 24px rgba(0,0,0,0.06); }
+    .gate-card .icon { font-size: 34px; }
+    .gate-card h2 { font-size: 20px; font-weight: 700; margin-top: 12px; }
+    .gate-card p { margin-top: 6px; font-size: 14px; color: var(--text-sub); }
+    .gate-card input { width: 100%; margin-top: 20px; padding: 15px 16px; font: inherit; font-size: 15px;
+                       border: 1px solid var(--border); border-radius: 14px; background: #fafbfc; }
+    .gate-card input:focus { outline: none; border-color: var(--toss-blue); background: #fff; }
+    .gate-err { margin-top: 10px; font-size: 13px; color: var(--red); min-height: 18px; }
   </style>
 </head>
 <body>
+  <div id="gate">
+    <div class="gate-card">
+      <div class="icon">🔒</div>
+      <h2>비밀번호 입력</h2>
+      <p>이용하려면 비밀번호가 필요해요</p>
+      <input type="password" id="gatePw" placeholder="비밀번호" autocomplete="current-password" />
+      <div class="gate-err" id="gateErr"></div>
+      <button class="primary" id="gateBtn" style="margin-top:8px;">입장</button>
+    </div>
+  </div>
+
   <div class="wrap">
     <header>
       <h1>이미지 해석 비교</h1>
@@ -227,6 +253,51 @@
     const clearHist = document.getElementById("clearHist");
 
     let currentFile = null;
+
+    /* ---------- 입장(비밀번호) 게이트 ---------- */
+    const gate = document.getElementById("gate");
+    const gatePw = document.getElementById("gatePw");
+    const gateBtn = document.getElementById("gateBtn");
+    const gateErr = document.getElementById("gateErr");
+    const PW_KEY = "appPassword";
+    function getPassword() { return sessionStorage.getItem(PW_KEY) || ""; }
+
+    async function initGate() {
+      let authRequired = false;
+      try {
+        const cfg = await (await fetch("/config")).json();
+        authRequired = !!cfg.auth_required;
+      } catch { /* 서버 응답 없으면 게이트 생략 */ }
+
+      if (!authRequired) { gate.classList.remove("show"); return; }
+
+      // 저장된 비번이 있으면 검증 후 통과
+      const saved = getPassword();
+      if (saved && await verifyPassword(saved)) { gate.classList.remove("show"); return; }
+      gate.classList.add("show");
+      gatePw.focus();
+    }
+
+    async function verifyPassword(pw) {
+      const fd = new FormData(); fd.append("password", pw);
+      try { return (await fetch("/auth", { method: "POST", body: fd })).ok; }
+      catch { return false; }
+    }
+
+    async function submitGate() {
+      const pw = gatePw.value;
+      gateErr.textContent = "";
+      gateBtn.disabled = true; gateBtn.textContent = "확인 중…";
+      if (await verifyPassword(pw)) {
+        sessionStorage.setItem(PW_KEY, pw);
+        gate.classList.remove("show");
+      } else {
+        gateErr.textContent = "비밀번호가 올바르지 않습니다.";
+      }
+      gateBtn.disabled = false; gateBtn.textContent = "입장";
+    }
+    gateBtn.addEventListener("click", submitGate);
+    gatePw.addEventListener("keydown", e => { if (e.key === "Enter") submitGate(); });
 
     /* ---------- 파일 선택 / 드래그앤드롭 ---------- */
     function setFile(file) {
@@ -347,9 +418,15 @@
       form.append("prompt", promptEl.value);
       form.append("claude_model", claudeSel.value);
       form.append("openai_model", openaiSel.value);
+      form.append("password", getPassword());
 
       try {
         const res = await fetch("/interpret", { method: "POST", body: form });
+        if (res.status === 401) {
+          sessionStorage.removeItem(PW_KEY);
+          gate.classList.add("show"); gatePw.value = ""; gatePw.focus();
+          throw new Error("비밀번호가 필요합니다. 다시 입장해주세요.");
+        }
         if (!res.ok) {
           const err = await res.json().catch(() => ({ detail: res.statusText }));
           throw new Error(err.detail || "요청 실패");
@@ -372,6 +449,7 @@
     });
 
     renderHist();
+    initGate();
   </script>
 </body>
 </html>
